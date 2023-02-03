@@ -19,8 +19,8 @@ func NewSpotifyAlbum(client *spotifyClient) *album {
 	}
 }
 
-func (a album) Search(name string, artist string, thingType ThingType) *ThingInfo {
-	return nil
+func (a album) Search(name string, artist string, thingType ThingType) (*ThingInfo, error) {
+	return nil, nil
 }
 
 func (a album) Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo {

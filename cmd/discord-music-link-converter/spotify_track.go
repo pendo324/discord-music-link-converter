@@ -21,8 +21,8 @@ func NewSpotifyTrack(client *spotifyClient) *track {
 	}
 }
 
-func (t track) Search(name string, artist string, thingType ThingType) *ThingInfo {
-	return nil
+func (t track) Search(name string, artist string, thingType ThingType) (*ThingInfo, error) {
+	return nil, nil
 }
 
 func (t track) Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo {

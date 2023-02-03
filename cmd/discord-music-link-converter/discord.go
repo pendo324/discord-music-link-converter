@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -80,7 +81,7 @@ func (d *disc) ListenToMessages(players []Player) {
 					// get all other players of type and search for thing
 					var otherHandlersOfType []Player
 					for innerInx, innerPlayer := range players {
-						if innerInx != idx && innerPlayer.HandlerType() != player.HandlerType() {
+						if innerInx != idx && innerPlayer.HandlerType() == player.HandlerType() {
 							otherHandlersOfType = append(otherHandlersOfType, innerPlayer)
 						}
 					}
@@ -90,21 +91,29 @@ func (d *disc) ListenToMessages(players []Player) {
 					var embeds []*discordgo.MessageEmbed
 					if thingInfo != nil {
 						for _, p := range otherHandlersOfType {
-							res := p.Search(thingInfo.Name, thingInfo.Artist, thingInfo.Type)
+							res, err := p.Search(thingInfo.Name, thingInfo.Artist, thingInfo.Type)
+							if err != nil {
+								log.Print("got error when searching: %w", err)
+							}
+
 							if res != nil {
 								embeds = append(embeds, &discordgo.MessageEmbed{
-									URL:  res.Link,
-									Type: "link",
+									URL:   res.Link,
+									Type:  "link",
+									Title: p.Name(),
 								})
 							}
 						}
 					}
 
 					// send message to thread with all the search info embedded
-					s.ChannelMessageSendComplex(thread.ID, &discordgo.MessageSend{
+					_, err = s.ChannelMessageSendComplex(thread.ID, &discordgo.MessageSend{
 						Embeds:  embeds,
 						Content: "Found these links in other services",
 					})
+					if err != nil {
+						log.Print("got error when sending reply in thread: %w", err)
+					}
 				}
 			}
 		}

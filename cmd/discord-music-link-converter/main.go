@@ -26,7 +26,7 @@ type ThingInfo struct {
 }
 
 type Player interface {
-	Search(name string, artist string, thingType ThingType) *ThingInfo
+	Search(name string, artist string, thingType ThingType) (*ThingInfo, error)
 	Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo
 	Name() string
 	Pattern() *regexp.Regexp
@@ -42,15 +42,25 @@ func main() {
 
 	disc, err := NewDiscord(botPtr)
 	if err != nil {
-		log.Fatalf("Cannot setup discord client: %v", err)
+		log.Print("failed to setup discord client: %w", err)
 	}
 
 	spotifyClient, err := NewSpotifyClient(*spotCid, *spotSec)
 	if err != nil {
-		log.Fatal(fmt.Errorf("failed to setup Spotify client: %w", err))
+		log.Print(fmt.Errorf("failed to setup Spotify client: %w", err))
 	}
 
-	disc.ListenToMessages([]Player{NewSpotifyAlbum(spotifyClient), NewSpotifyTrack(spotifyClient)})
+	appleClient, err := NewAppleClient()
+	if err != nil {
+		log.Print(fmt.Errorf("failed to setup Apple client: %w", err))
+	}
+
+	disc.ListenToMessages([]Player{
+		NewSpotifyAlbum(spotifyClient),
+		NewSpotifyTrack(spotifyClient),
+		NewAppleAlbum(appleClient),
+		NewAppleTrack(appleClient),
+	})
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)

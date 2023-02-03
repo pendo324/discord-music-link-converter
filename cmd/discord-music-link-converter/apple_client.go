@@ -1,50 +1,124 @@
 package main
 
 import (
-	"bufio"
-	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 
-	"github.com/pendo324/discord-music-link-converter/pkg/util"
+	applemusic "github.com/minchao/go-apple-music"
 )
 
-type appleClient struct{}
+type AppleClient interface {
+	Search(term string, types []string) (*applemusic.Search, error)
+	GetAlbumById(id string) (*applemusic.Album, error)
+}
+
+type appleClient struct {
+	token string
+}
+
+var _ AppleClient = (*appleClient)(nil)
 
 func NewAppleClient() (*appleClient, error) {
-	req, err := http.NewRequest("GET", "https://music.apple.com/", strings.NewReader(""))
+	url := "https://music.apple.com"
+
+	r, err := http.Get(url)
 	if err != nil {
-		return nil, err
-	}
-	client := &http.Client{}
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get %s: %w", url, err)
 	}
 
-	var ctx context.Context
-	var buf []byte
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %s: %w", url, err)
+	}
 
-	allMatches := make(chan string)
+	re := regexp.MustCompile(`[^"]*index\..*\.js`)
+	path := re.FindString(string(b))
 
-	// TODO(Otto): idk help ty
-	re := regexp.MustCompile(`[^"]*index.[a-z0-9]*.js`)
+	r, err = http.Get(url + path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %s: %w", url+path, err)
+	}
 
-	go func() {
-		defer close(allMatches)
+	b, err = io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %s: %w", url+path, err)
+	}
 
-		scanner := bufio.NewScanner(res.Body)
-		scanner.Buffer(buf, 100)
-		scanner.Split(util.SplitRegex(re))
-		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
-				return
-			case allMatches <- scanner.Text():
-			}
-		}
-	}()
+	re = regexp.MustCompile(`([^"]*)"[^"]*"x-apple-jingle-correlation-key`)
+	token := re.FindStringSubmatch(string(b))[1]
 
-	return nil, nil
+	return &appleClient{
+		token: token,
+	}, nil
+}
+
+func (c appleClient) Search(term string, types []string) (*applemusic.Search, error) {
+	url := "https://api.music.apple.com/v1/catalog/us/search"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request to %s: %w", url, err)
+	}
+
+	q := req.URL.Query()
+	q.Add("term", term)
+
+	if len(types) > 0 {
+		q.Add("types", strings.Join(types, ","))
+	}
+
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("origin", "https://music.apple.com")
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", c.token))
+
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request to %s: %w", url, err)
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body of request to %s: %w", url, err)
+	}
+
+	var searchResults applemusic.Search
+	err = json.Unmarshal(b, &searchResults)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal search results: %w", err)
+	}
+
+	return &searchResults, nil
+}
+
+func (c appleClient) GetAlbumById(id string) (*applemusic.Album, error) {
+	url := fmt.Sprintf("https://api.music.apple.com/v1/catalog/us/albums/%s", id)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request to %s: %w", url, err)
+	}
+
+	req.Header.Set("origin", "https://music.apple.com")
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", c.token))
+
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request to %s: %w", url, err)
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body of request to %s: %w", url, err)
+	}
+
+	var albums applemusic.Albums
+	err = json.Unmarshal(b, &albums)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal search results: %w", err)
+	}
+
+	return &albums.Data[0], nil
 }
