@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
@@ -31,7 +32,7 @@ func (a apple_track) Search(name string, artist string, thingType ThingType) (*T
 	if len(res.Results.Songs.Data) > 0 {
 		return &ThingInfo{
 			Link:   res.Results.Songs.Data[0].Attributes.URL,
-			Type:   ThingType("album"),
+			Type:   a.HandlerType(),
 			Artist: res.Results.Songs.Data[0].Attributes.ArtistName,
 			Name:   res.Results.Songs.Data[0].Attributes.Name,
 		}, nil
@@ -40,9 +41,25 @@ func (a apple_track) Search(name string, artist string, thingType ThingType) (*T
 	return nil, fmt.Errorf("no results")
 }
 
-func (a apple_track) Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo {
-	sendMessage(fmt.Sprintf("This is a %s!", a.Name()))
-	return nil
+func (a apple_track) Handler(message *discordgo.MessageCreate, matches []string) *ThingInfo {
+	id := a.Pattern().SubexpIndex("albumSongId")
+	if id == -1 {
+		// check if songId matches for alternate pattern
+		id = a.Pattern().SubexpIndex("songId")
+	}
+	songId := matches[id]
+
+	res, err := a.apple.GetSongById(songId)
+	if err != nil {
+		log.Println(fmt.Errorf("error getting the Apple track: %w", err))
+	}
+
+	return &ThingInfo{
+		Artist: res.Attributes.ArtistName,
+		Name:   res.Attributes.Name,
+		Type:   a.HandlerType(),
+		Link:   message.Content,
+	}
 }
 
 func (apple_track) HandlerType() ThingType {
@@ -54,5 +71,5 @@ func (apple_track) Name() string {
 }
 
 func (apple_track) Pattern() *regexp.Regexp {
-	return regexp.MustCompile(`https://music\.apple\.com/(?P<storefront>[a-z]+)/song/[0-9a-z-]+/(?P<id>[0-9]+)`)
+	return regexp.MustCompile(`https://music\.apple\.com/(?P<storefront>[a-z]+)/(album/[0-9a-z-]+/(?P<albumId>[0-9]+)\?i=(?P<albumSongId>[0-9]+)|(song/[0-9a-z-]+/(?P<songId>[0-9]+)))`)
 }

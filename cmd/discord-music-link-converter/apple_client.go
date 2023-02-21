@@ -122,3 +122,32 @@ func (c appleClient) GetAlbumById(id string) (*applemusic.Album, error) {
 
 	return &albums.Data[0], nil
 }
+
+func (c appleClient) GetSongById(id string) (*applemusic.Song, error) {
+	url := fmt.Sprintf("https://api.music.apple.com/v1/catalog/us/songs/%s", id)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request to %s: %w", url, err)
+	}
+
+	req.Header.Set("origin", "https://music.apple.com")
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", c.token))
+
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request to %s: %w", url, err)
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body of request to %s: %w", url, err)
+	}
+
+	var songs applemusic.Songs
+	err = json.Unmarshal(b, &songs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal search results: %w", err)
+	}
+
+	return &songs.Data[0], nil
+}

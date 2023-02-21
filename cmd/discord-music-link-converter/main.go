@@ -27,7 +27,7 @@ type ThingInfo struct {
 
 type Player interface {
 	Search(name string, artist string, thingType ThingType) (*ThingInfo, error)
-	Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo
+	Handler(message *discordgo.MessageCreate, matches []string) *ThingInfo
 	Name() string
 	Pattern() *regexp.Regexp
 	HandlerType() ThingType

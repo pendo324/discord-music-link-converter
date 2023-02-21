@@ -9,33 +9,46 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-type track struct {
+type spotify_track struct {
 	spotify *spotifyClient
 }
 
-var _ Player = (*track)(nil)
+var _ Player = (*spotify_track)(nil)
 
-func NewSpotifyTrack(client *spotifyClient) *track {
-	return &track{
+func NewSpotifyTrack(client *spotifyClient) *spotify_track {
+	return &spotify_track{
 		spotify: client,
 	}
 }
 
-func (t track) Search(name string, artist string, thingType ThingType) (*ThingInfo, error) {
-	return nil, nil
+func (t spotify_track) Search(name string, artist string, thingType ThingType) (*ThingInfo, error) {
+	term := fmt.Sprintf("%s %s", name, artist)
+	res, err := t.spotify.client.Search(t.spotify.ctx, term, spotify.SearchTypeTrack)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to search spotify for tracks with term (%s): %w", term, err)
+	}
+
+	if len(res.Tracks.Tracks) > 0 {
+		return &ThingInfo{
+			Link:   fmt.Sprintf("https://open.spotify.com/track/%s", res.Tracks.Tracks[0].ID.String()),
+			Type:   t.HandlerType(),
+			Artist: res.Tracks.Tracks[0].Artists[0].Name,
+			Name:   res.Tracks.Tracks[0].Name,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("no results")
 }
 
-func (t track) Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo {
+func (t spotify_track) Handler(message *discordgo.MessageCreate, matches []string) *ThingInfo {
 	id := t.Pattern().SubexpIndex("id")
 	trackId := matches[id]
 
 	res, err := t.spotify.client.GetTrack(t.spotify.ctx, spotify.ID(trackId))
 	if err != nil {
-		log.Println(fmt.Errorf("wow, got an error getting the Spotify track: %w", err))
+		log.Println(fmt.Errorf("error getting the Spotify track: %w", err))
 	}
-	sendMessage(fmt.Sprintf("This is a %s!", t.Name()))
-	sendMessage("Found matching song!")
-	sendMessage(fmt.Sprintf("This is %s!", res.Name))
 
 	return &ThingInfo{
 		Artist: res.Artists[0].Name,
@@ -45,14 +58,14 @@ func (t track) Handler(message *discordgo.MessageCreate, matches []string, sendM
 	}
 }
 
-func (track) HandlerType() ThingType {
+func (spotify_track) HandlerType() ThingType {
 	return ThingType("track")
 }
 
-func (track) Name() string {
+func (spotify_track) Name() string {
 	return "Spotify (track)"
 }
 
-func (track) Pattern() *regexp.Regexp {
+func (spotify_track) Pattern() *regexp.Regexp {
 	return regexp.MustCompile(`https://open\.spotify\.com/track/(?P<id>[a-zA-Z0-9]+)`)
 }

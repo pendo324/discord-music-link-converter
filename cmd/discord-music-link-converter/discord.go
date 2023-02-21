@@ -58,26 +58,13 @@ func NewDiscord(botToken *string) (Discord, error) {
 func (d *disc) ListenToMessages(players []Player) {
 	fmt.Println("Setting up handler...")
 	d.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		fmt.Printf("Got message: %s\n", m.Content)
-
+		var thread *discordgo.Channel
 		for idx, player := range players {
 			matches := player.Pattern().FindStringSubmatch(m.Content)
 			if len(matches) > 0 {
+				fmt.Printf("Original message in channel (%s) on server (%s): %s\n", m.Content, m.ChannelID, m.GuildID)
+
 				if ch, err := s.State.Channel(m.ChannelID); err != nil || !ch.IsThread() {
-					thread, err := s.MessageThreadStartComplex(m.ChannelID, m.ID, &discordgo.ThreadStart{
-						Name:                "Alternate links",
-						AutoArchiveDuration: 60,
-						Invitable:           true,
-					})
-
-					if err != nil {
-						fmt.Println("failed to create thread: %w", err)
-					}
-
-					var sendMessage = func(message string) {
-						s.ChannelMessageSend(thread.ID, message)
-					}
-
 					// get all other players of type and search for thing
 					var otherHandlersOfType []Player
 					for innerInx, innerPlayer := range players {
@@ -86,7 +73,19 @@ func (d *disc) ListenToMessages(players []Player) {
 						}
 					}
 
-					thingInfo := player.Handler(m, matches, sendMessage)
+					thingInfo := player.Handler(m, matches)
+
+					if thread == nil {
+						thread, err = s.MessageThreadStartComplex(m.ChannelID, m.ID, &discordgo.ThreadStart{
+							Name:                fmt.Sprintf("Alternate links for %s: %s by %s", thingInfo.Type, thingInfo.Artist, thingInfo.Name),
+							AutoArchiveDuration: 60,
+							Invitable:           true,
+						})
+					}
+
+					if err != nil {
+						fmt.Println("failed to create thread: %w", err)
+					}
 
 					var embeds []*discordgo.MessageEmbed
 					if thingInfo != nil {

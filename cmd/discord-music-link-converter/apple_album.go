@@ -41,18 +41,14 @@ func (a apple_album) Search(name string, artist string, thingType ThingType) (*T
 	return nil, fmt.Errorf("no results")
 }
 
-func (a apple_album) Handler(message *discordgo.MessageCreate, matches []string, sendMessage func(message string)) *ThingInfo {
+func (a apple_album) Handler(message *discordgo.MessageCreate, matches []string) *ThingInfo {
 	id := a.Pattern().SubexpIndex("id")
 	albumId := matches[id]
 
 	res, err := a.apple.GetAlbumById(albumId)
 	if err != nil {
-		log.Println(fmt.Errorf("wow, got an error getting the Apple album: %w", err))
+		log.Println(fmt.Errorf("error getting the Apple album: %w", err))
 	}
-
-	sendMessage(fmt.Sprintf("This is a %s!", a.Name()))
-	sendMessage("Found matching album!")
-	sendMessage(fmt.Sprintf("This is %s!", res.Attributes.Name))
 
 	return &ThingInfo{
 		Artist: res.Attributes.ArtistName,
@@ -71,5 +67,5 @@ func (apple_album) Name() string {
 }
 
 func (apple_album) Pattern() *regexp.Regexp {
-	return regexp.MustCompile(`https://music\.apple\.com/(?P<storefront>[a-z]+)/album/[0-9a-z-]+/(?P<id>[0-9]+)`)
+	return regexp.MustCompile(`https://music\.apple\.com/(?P<storefront>[a-z]+)/album/[0-9a-z-]+/(?P<id>[0-9]+)$`)
 }
